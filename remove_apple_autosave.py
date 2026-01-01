@@ -8,7 +8,7 @@ https://console.cloud.google.com/apis/dashboard
 """
 
 CLIENT_SECRETS_FILE = 'client_secrets.json'
-TOKEN_FILE='token.json'
+TOKEN_FILE='token_gmail.json'
 SCOPES = ["https://mail.google.com/" ]
 
 import os.path
@@ -82,7 +82,7 @@ LIST_MAX_RESULTS = 100
 GET_BATCH_SIZE  = 30
 RM_BATCH_SIZE   = 45
 
-APPLE_AUTO_SAVE_HEADER='X-Apple-Auto-Saved'
+APPLE_AUTOSAVE_HEADER='X-Apple-Auto-Saved'
 
 BAD_REQUEST_ERROR  = 400        # Google bug
 TOO_MANY_REQUESTS_ERROR = 429
@@ -107,16 +107,19 @@ class RemoveAppleAutosave:
             if exception.status_code in IGNORE_ERRORS_SET:
                 self.extra_timeout = 1
                 return
+            logging.error("request_id=%s response=%s exception=(%s) %s",request_id,response,dir(exception),exception)
             raise RuntimeError(f"Unknown exception fetching messages: {exception}")
         self.listed += 1
         self.get_message_ids.remove( response['id'] )
         headers = response['payload']['headers']
-        aas     = get_header(headers, APPLE_AUTO_SAVE_HEADER)
+        aas     = get_header(headers, APPLE_AUTOSAVE_HEADER)
         if aas:
             self.del_messages.append( response )
 
-
     def run(self):
+        """Scan the Gmail archive (files not in INBOX) and look for those with the APPLE_AUTOSAVE_HEADER.
+        Gmail does not allow searching by arbitrary headers, so we need to download and examine every message.
+        """
         page_token = None
         first  = True
         http_errors_retry = 0
@@ -148,7 +151,7 @@ class RemoveAppleAutosave:
                 for (ct,messageId) in enumerate(self.get_message_ids,1):
                     batch.add(self.service.users().messages().get(userId='me', id=messageId,
                                                              format='metadata',
-                                                             metadataHeaders=['subject', 'date', 'to', APPLE_AUTO_SAVE_HEADER]))
+                                                             metadataHeaders=['subject', 'date', 'to', APPLE_AUTOSAVE_HEADER]))
                     if ct>GET_BATCH_SIZE:
                         break
                 try:
@@ -228,4 +231,7 @@ def main():
 if __name__ == "__main__":
     logging.basicConfig()
     logging.getLogger().setLevel(logging.INFO)
-    main()
+    try:
+        main()
+    except KeyboardInterrupt:
+        print("Terminating.")

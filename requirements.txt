@@ -4,3 +4,4 @@ google-auth-oauthlib
 ratelimit
 backoff
 pip
+pyobjc
